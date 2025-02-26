@@ -42,7 +42,7 @@
       const ctx = canvas.getContext("2d");
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-
+      
       // Global variable to store current mouse position.
       let mouse = { x: 0, y: 0 };
       
@@ -612,10 +612,17 @@
             },
             check_bottom_bounce: {
               condition: () => this.cardinalBallPoints.bottom >= canvas.height && this.dy > 0,
-              action: () => { 
-                // Clamp the ball to the bottom and reverse its dy.
+              action: () => {
+                // Compute the previous y position.
+                const prevY = this.y - this.dy;
+                // Calculate the fraction of the time step at which the ball hit the floor.
+                let dt = (canvas.height - this.radius - prevY) / this.dy;
+                dt = Math.max(0, Math.min(dt, 1));
+                // Clamp the ball exactly at the floor.
                 this.y = canvas.height - this.radius;
-                this.dy = -this.dy;
+                // Reverse the vertical velocity.
+                // Subtract the gravitational impulse that would have been applied after impact.
+                this.dy = -(this.dy - GRAVITY * (1 - dt));
               }
             },
             check_top_bounce: {
