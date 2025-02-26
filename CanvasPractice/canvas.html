@@ -613,16 +613,18 @@
             check_bottom_bounce: {
               condition: () => this.cardinalBallPoints.bottom >= canvas.height && this.dy > 0,
               action: () => {
-                // Compute the previous y position.
-                const prevY = this.y - this.dy;
-                // Calculate the fraction of the time step at which the ball hit the floor.
-                let dt = (canvas.height - this.radius - prevY) / this.dy;
-                dt = Math.max(0, Math.min(dt, 1));
-                // Clamp the ball exactly at the floor.
-                this.y = canvas.height - this.radius;
-                // Reverse the vertical velocity.
-                // Subtract the gravitational impulse that would have been applied after impact.
-                this.dy = -(this.dy - GRAVITY * (1 - dt));
+                // If gravity is enabled, adjust for overshoot.
+                if (gravityEnabled) {
+                  const prevY = this.y - this.dy;
+                  let dt = (canvas.height - this.radius - prevY) / this.dy;
+                  dt = Math.max(0, Math.min(dt, 1));
+                  this.y = canvas.height - this.radius;
+                  // Subtract the gravitational impulse over the remaining time.
+                  this.dy = -(this.dy - GRAVITY * (1 - dt));
+                } else {
+                  this.y = canvas.height - this.radius;
+                  this.dy = -this.dy;
+                }
               }
             },
             check_top_bounce: {
