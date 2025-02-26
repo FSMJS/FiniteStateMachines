@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bouncy FSM Ball</title>
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        background: #eee;
+      }
+      /* Style for the ball count selection container */
+      #ballSliderContainer {
+         position: absolute;
+         top: 40%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         background: #fff;
+         padding: 20px;
+         border: 1px solid #333;
+         text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <!-- Hidden container for ball count selection -->
+    <div id="ballSliderContainer" style="display:none;">
+       <p>Select number of balls:</p>
+       <input type="range" id="ballSlider" min="1" max="50" value="5">
+       <span id="ballCountDisplay">5</span>
+       <br>
+       <button id="startGameBtn">Start Game</button>
+    </div>
+    <script>
+      // Set up the canvas.
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // Global variable to store current mouse position.
+      let mouse = { x: 0, y: 0 };
+      
+      // Global flag for gravity; default off.
+      let gravityEnabled = false;
+      // Gravity constant (pixels per frame^2)
+      const GRAVITY = 0.5;
+      
+      // Global variable to track the fastest detected ball speed.
+      let globalMaxSpeed = 0;
+      
+      // Update the mouse coordinates on mouse move.
+      window.addEventListener("mousemove", (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        if (currentState.onMouseMove) currentState.onMouseMove(e);
+      });
+      
+      // ----------------------------------------------------------------
+      // Helper function to draw a button with hover effect.
+      // ----------------------------------------------------------------
+      function drawHoverableButton(ctx, button) {
+        if (
+          mouse.x >= button.x &&
+          mouse.x <= button.x + button.width &&
+          mouse.y >= button.y &&
+          mouse.y <= button.y + button.height
+        ) {
+          ctx.fillStyle = "black";
+          ctx.fillRect(button.x, button.y, button.width, button.height);
+          ctx.strokeStyle = "white";
+          ctx.strokeRect(button.x, button.y, button.width, button.height);
+          ctx.fillStyle = "white";
+        } else {
+          ctx.fillStyle = "white";
+          ctx.fillRect(button.x, button.y, button.width, button.height);
+          ctx.strokeStyle = "black";
+          ctx.strokeRect(button.x, button.y, button.width, button.height);
+          ctx.fillStyle = "black";
+        }
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          button.text,
+          button.x + button.width / 2,
+          button.y + button.height / 2 + 7
+        );
+      }
+      
+      // ---------------------------------------------------
+      // Helper: interpolateColor
+      // Maps a speed (0 to maxSpeed) to a color between white and dark blue.
+      // When speed == 0, returns white; when speed >= maxSpeed, returns dark blue.
+      // ---------------------------------------------------
+      function interpolateColor(speed, maxSpeed) {
+        let t = Math.min(speed / maxSpeed, 1);
+        // White: (255,255,255), Dark Blue: (8,81,156)
+        const r = Math.round(255 * (1 - t) + 8 * t ** 2);
+        const g = Math.round(255 * (1 - t) + 81 * t ** 2);
+        const b = Math.round(255 * (1 - t) + 156 * t ** 2);
+        return `rgb(${r},${g},${b})`;
+      }
+      
+      // ---------------------------------------------------
+      // Abstract Game State Class for the overall FSM
+      // ---------------------------------------------------
+      class GameState {
+        constructor() {
+          if (new.target === GameState) {
+            throw new Error("Cannot instantiate abstract GameState");
+          }
+          this.buttons = [];
+        }
+        update() {}
+        // Consolidated menu drawing function.
+        drawMenu(ctx, title, subText = "") {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#333";
+          ctx.font = "30px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 150);
+          if (subText) {
+            ctx.fillText(subText, canvas.width / 2, canvas.height / 2 - 100);
+          }
+          for (let button of this.buttons) {
+            drawHoverableButton(ctx, button);
+          }
+        }
+        draw(ctx) {}
+        onMouseDown(e) {
+          const mouseX = e.clientX;
+          const mouseY = e.clientY;
+          for (let button of this.buttons) {
+            if (
+              mouseX >= button.x &&
+              mouseX <= button.x + button.width &&
+              mouseY >= button.y &&
+              mouseY <= button.y + button.height
+            ) {
+              button.action();
+            }
+          }
+        }
+        onMouseMove(e) {}
+        onMouseUp(e) {}
+      }
+      
+      // ---------------------------------------------------
+      // Main Menu State.
+      // ---------------------------------------------------
+      class MainMenuState extends GameState {
+        constructor() {
+          super();
+          this.buttons = [
+            {
+              x: canvas.width / 2 - 100,
+              y: canvas.height / 2 - 70,
+              width: 200,
+              height: 50,
+              text: "Play Game",
+              action: () => {
+                // Transition to gravity selection state.
+                currentState = new GravitySelectionState();
+              }
+            },
+            {
+              x: canvas.width / 2 - 100,
+              y: canvas.height / 2 + 20,
+              width: 200,
+              height: 50,
+              text: "Do Something Else",
+              action: () => {
+                currentState = new SomethingElseState();
+              }
+            }
+          ];
+        }
+        update() {}
+        draw(ctx) {
+          this.drawMenu(ctx, "Main Menu");
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Gravity Selection State – user chooses whether to include gravity.
+      // ---------------------------------------------------
+      class GravitySelectionState extends GameState {
+        constructor() {
+          super();
+          this.buttons = [
+            {
+              x: canvas.width / 2 - 150,
+              y: canvas.height / 2 - 50,
+              width: 130,
+              height: 50,
+              text: "Gravity On",
+              action: () => {
+                gravityEnabled = true;
+                currentState = new BallCountSelectionState();
+              }
+            },
+            {
+              x: canvas.width / 2 + 20,
+              y: canvas.height / 2 - 50,
+              width: 130,
+              height: 50,
+              text: "Gravity Off",
+              action: () => {
+                gravityEnabled = false;
+                currentState = new BallCountSelectionState();
+              }
+            }
+          ];
+        }
+        update() {}
+        draw(ctx) {
+          this.drawMenu(ctx, "Include Gravity?");
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Ball Count Selection State – displays slider for number of balls.
+      // ---------------------------------------------------
+      class BallCountSelectionState extends GameState {
+        constructor() {
+          super();
+          // Show the slider container.
+          document.getElementById("ballSliderContainer").style.display = "block";
+          const slider = document.getElementById("ballSlider");
+          const display = document.getElementById("ballCountDisplay");
+          slider.addEventListener("input", () => {
+            display.textContent = slider.value;
+          });
+          document.getElementById("startGameBtn").onclick = () => {
+            const numBalls = parseInt(slider.value);
+            // Hide slider container.
+            document.getElementById("ballSliderContainer").style.display = "none";
+            currentState = new PlayGameState(numBalls);
+          };
+        }
+        update() {}
+        draw(ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#333";
+          ctx.font = "30px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("Select number of balls", canvas.width / 2, canvas.height / 2 - 150);
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Something Else State – allows generating a random number.
+      // ---------------------------------------------------
+      class SomethingElseState extends GameState {
+        constructor() {
+          super();
+          this.randomNumber = null;
+          this.buttons = [
+            {
+              x: canvas.width / 2 - 100,
+              y: canvas.height / 2 - 70,
+              width: 200,
+              height: 50,
+              text: "Generate Number",
+              action: () => {
+                this.randomNumber = Math.floor(Math.random() * 100) + 1;
+              }
+            },
+            {
+              x: canvas.width / 2 - 100,
+              y: canvas.height / 2 + 20,
+              width: 200,
+              height: 50,
+              text: "Back to Menu",
+              action: () => {
+                currentState = new MainMenuState();
+              }
+            }
+          ];
+        }
+        update() {}
+        draw(ctx) {
+          const subText = this.randomNumber !== null ? "Random Number: " + this.randomNumber : "";
+          this.drawMenu(ctx, "Do Something Else", subText);
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Play Game State – shows multiple bouncing balls.
+      // ---------------------------------------------------
+      class PlayGameState extends GameState {
+        constructor(numBalls) {
+          super();
+          this.balls = [];
+          // Create the specified number of balls with random positions/velocities.
+          for (let i = 0; i < numBalls; i++) {
+            const radius = 30;
+            const x = Math.random() * (canvas.width - 2 * radius) + radius;
+            const y = Math.random() * (canvas.height - 2 * radius) + radius;
+            const dx = (Math.random() - 0.5) * 10;
+            const dy = (Math.random() - 0.5) * 10;
+            this.balls.push(new Ball(x, y, dx, dy, radius));
+          }
+          // Check if balls overlap and adjust positions.
+          for (let i = 0; i < this.balls.length; i++) {
+            for (let j = i + 1; j < this.balls.length; j++) {
+              while (areOverlapping(this.balls[i], this.balls[j])) {
+                this.balls[i].x = Math.random() * (canvas.width - 2 * 50) + 50;
+                this.balls[i].y = Math.random() * (canvas.height - 2 * 50) + 50;
+              }
+            }
+          }
+        }
+        update() {
+          // Update each ball.
+          this.balls.forEach(ball => ball.update());
+          // Compute the fastest speed among all balls.
+          globalMaxSpeed = 0;
+          this.balls.forEach(ball => {
+            const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+            if (speed > globalMaxSpeed) globalMaxSpeed = speed;
+          });
+          // Check for collisions between every pair of balls.
+          for (let i = 0; i < this.balls.length; i++) {
+            for (let j = i + 1; j < this.balls.length; j++) {
+              if (areColliding(this.balls[i], this.balls[j])) {
+                const ball1 = this.balls[i];
+                const ball2 = this.balls[j];
+                // Adjust overlap to force tangency.
+                adjustOverlap(ball1, ball2);
+                resolveCollision(ball1, ball2);
+                const ball1Dragged = ball1.state instanceof BallDraggedState;
+                const ball2Dragged = ball2.state instanceof BallDraggedState;
+                if (ball1Dragged && !ball2Dragged) {
+                  ball1.stored_dx = ball1.dx;
+                  ball1.stored_dy = ball1.dy;
+                  ball2.changeState(new BallCollisionState(ball2));
+                } else if (ball2Dragged && !ball1Dragged) {
+                  ball2.stored_dx = ball2.dx;
+                  ball2.stored_dy = ball2.dy;
+                  ball1.changeState(new BallCollisionState(ball1));
+                } else if (!ball1Dragged && !ball2Dragged) {
+                  ball1.changeState(new BallCollisionState(ball1));
+                  ball2.changeState(new BallCollisionState(ball2));
+                }
+              }
+            }
+          }
+        }
+        draw(ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          this.balls.forEach(ball => ball.draw(ctx));
+        }
+        onMouseDown(e) {
+          this.balls.forEach(ball => ball.onMouseDown(e));
+        }
+        onMouseMove(e) {
+          this.balls.forEach(ball => ball.onMouseMove(e));
+        }
+        onMouseUp(e) {
+          this.balls.forEach(ball => ball.onMouseUp(e));
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Global State Management and Animation Loop
+      // ---------------------------------------------------
+      let currentState = new MainMenuState();
+      
+      function animate() {
+        requestAnimationFrame(animate);
+        currentState.update();
+        currentState.draw(ctx);
+      }
+      animate();
+      
+      canvas.addEventListener("mousedown", (e) => {
+        if (currentState.onMouseDown) currentState.onMouseDown(e);
+      });
+      window.addEventListener("mouseup", (e) => {
+        if (currentState.onMouseUp) currentState.onMouseUp(e);
+      });
+      
+      // ---------------------------------------------------
+      // Utility function: adjustOverlap
+      // Forces two overlapping balls to be exactly tangent.
+      // Each ball is moved inversely proportional to its speed.
+      // ---------------------------------------------------
+      function adjustOverlap(ball1, ball2) {
+        const dx = ball2.x - ball1.x;
+        const dy = ball2.y - ball1.y;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        const desiredDist = ball1.radius + ball2.radius;
+        const overlap = desiredDist - distance;
+        if (overlap > 0) {
+          // Compute speeds.
+          const v1 = Math.sqrt(ball1.dx * ball1.dx + ball1.dy * ball1.dy);
+          const v2 = Math.sqrt(ball2.dx * ball2.dx + ball2.dy * ball2.dy);
+          const epsilon = 0.001;
+          let weight1 = 1 / (v1 + epsilon);
+          let weight2 = 1 / (v2 + epsilon);
+          // If a ball is dragged, adjust its weight (dragged ball moves less).
+          if (ball1.state instanceof BallDraggedState) {
+            weight1 *= 0.1;
+          }
+          if (ball2.state instanceof BallDraggedState) {
+            weight2 *= 0.1;
+          }
+          const totalWeight = weight1 + weight2;
+          const moveX = (overlap * dx / distance);
+          const moveY = (overlap * dy / distance);
+          ball1.x -= moveX * (weight1 / totalWeight);
+          ball1.y -= moveY * (weight1 / totalWeight);
+          ball2.x += moveX * (weight2 / totalWeight);
+          ball2.y += moveY * (weight2 / totalWeight);
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Utility functions for collision detection and resolution.
+      // ---------------------------------------------------
+      function areColliding(ball1, ball2) {
+        const dx = ball2.x - ball1.x;
+        const dy = ball2.y - ball1.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < (ball1.radius + ball2.radius);
+      }
+      
+      function areOverlapping(ball1, ball2) {
+        const dx = ball2.x - ball1.x;
+        const dy = ball2.y - ball1.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < (ball1.radius + ball2.radius);
+      }
+      
+      function resolveCollision(ball1, ball2) {
+        const dx = ball2.x - ball1.x;
+        const dy = ball2.y - ball1.y;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        // Normal vector
+        const nx = dx / distance;
+        const ny = dy / distance;
+        // Tangent vector
+        const tx = -ny;
+        const ty = nx;
+        // Dot product tangent
+        const dpTan1 = ball1.dx * tx + ball1.dy * ty;
+        const dpTan2 = ball2.dx * tx + ball2.dy * ty;
+        // Dot product normal
+        const dpNorm1 = ball1.dx * nx + ball1.dy * ny;
+        const dpNorm2 = ball2.dx * nx + ball2.dy * ny;
+        // Swap normal velocities (equal mass)
+        const m1 = dpNorm2;
+        const m2 = dpNorm1;
+        // Update velocities.
+        ball1.dx = tx * dpTan1 + nx * m1;
+        ball1.dy = ty * dpTan1 + ny * m1;
+        ball2.dx = tx * dpTan2 + nx * m2;
+        ball2.dy = ty * dpTan2 + ny * m2;
+      }
+      
+      // ---------------------------------------------------
+      // Ball Finite State Machine Classes
+      // ---------------------------------------------------
+      class BallState {
+        constructor(ball) {
+          this.ball = ball;
+        }
+        update() {}
+      }
+      
+      class FreeMovementState extends BallState {
+        update() {
+          const bounceActions = this.ball.getBounceActions();
+          for (let key in bounceActions) {
+            if (bounceActions[key].condition()) {
+              this.ball.changeState(new BallAtBoundaryState(this.ball));
+              break;
+            }
+          }
+        }
+      }
+      
+      class BallAtBoundaryState extends BallState {
+        update() {
+          const bounceActions = this.ball.getBounceActions();
+          for (let key in bounceActions) {
+            if (bounceActions[key].condition()) {
+              bounceActions[key].action();
+            }
+          }
+          this.ball.changeState(new FreeMovementState(this.ball));
+        }
+      }
+      
+      class BallCollisionState extends BallState {
+        update() {
+          // After collision resolution, revert to free movement.
+          this.ball.changeState(new FreeMovementState(this.ball));
+        }
+      }
+      
+      class BallDraggedState extends BallState {
+        update() {
+          // No automatic update while dragging.
+        }
+      }
+      
+      // ---------------------------------------------------
+      // Ball Class
+      // ---------------------------------------------------
+      class Ball {
+        constructor(x, y, dx, dy, radius) {
+          this.x = x;
+          this.y = y;
+          this.dx = dx;
+          this.dy = dy;
+          this.radius = radius;
+          this.stored_dx = dx;
+          this.stored_dy = dy;
+          this.state = new FreeMovementState(this);
+          // For tracking mouse movement during drag.
+          this.lastMouseX = 0;
+          this.lastMouseY = 0;
+          // Initial color.
+          this.color = "blue";
+        }
+        update() {
+          this.state.update();
+          // If gravity is enabled, add acceleration to dy.
+          if (gravityEnabled) {
+            this.dy += GRAVITY;
+          }
+          this.x += this.dx;
+          this.y += this.dy;
+        }
+        updateColor() {
+          const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+          // Use the fastest detected speed, defaulting to 20 if none.
+          const maxSpeed = globalMaxSpeed > 0 ? globalMaxSpeed : 20;
+          if (speed < 0.1) {
+            this.color = "#ffffff"; // Stopped ball becomes white.
+          } else {
+            this.color = interpolateColor(speed, maxSpeed);
+          }
+        }
+        draw(ctx) {
+          this.updateColor();
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.fill();
+        }
+        changeState(newState) {
+          this.state = newState;
+        }
+        onMouseDown(e) {
+          const dist = Math.sqrt((e.clientX - this.x) ** 2 + (e.clientY - this.y) ** 2);
+          if (dist <= this.radius * 2) {
+            // Start dragging: reset velocity and store initial mouse position.
+            this.dx = 0;
+            this.dy = 0;
+            this.lastMouseX = e.clientX;
+            this.lastMouseY = e.clientY;
+            this.changeState(new BallDraggedState(this));
+          }
+        }
+        onMouseMove(e) {
+          if (this.state instanceof BallDraggedState) {
+            // Compute new position and update velocity based on mouse movement.
+            const newX = Math.max(this.radius, Math.min(e.clientX, canvas.width - this.radius));
+            const newY = Math.max(this.radius, Math.min(e.clientY, canvas.height - this.radius));
+            // Velocity is determined by the difference in mouse positions.
+            this.dx = newX - this.lastMouseX;
+            this.dy = newY - this.lastMouseY;
+            this.x = newX;
+            this.y = newY;
+            this.lastMouseX = newX;
+            this.lastMouseY = newY;
+          }
+        }
+        onMouseUp(e) {
+          if (this.state instanceof BallDraggedState) {
+            // When released, retain the computed velocity.
+            this.changeState(new FreeMovementState(this));
+          }
+        }
+        // Getter for cardinal ball points.
+        get cardinalBallPoints() {
+          return {
+            top: this.y - this.radius,
+            bottom: this.y + this.radius,
+            left: this.x - this.radius,
+            right: this.x + this.radius
+          };
+        }
+        // Method to create the bounce actions dictionary.
+        getBounceActions() {
+          return {
+            check_right_bounce: {
+              condition: () => this.cardinalBallPoints.right >= canvas.width && this.dx > 0,
+              action: () => { this.dx = -this.dx; }
+            },
+            check_left_bounce: {
+              condition: () => this.cardinalBallPoints.left <= 0 && this.dx < 0,
+              action: () => { this.dx = -this.dx; }
+            },
+            check_bottom_bounce: {
+              condition: () => this.cardinalBallPoints.bottom >= canvas.height && this.dy > 0,
+              action: () => { 
+                // Clamp the ball to the bottom and reverse its dy.
+                this.y = canvas.height - this.radius;
+                this.dy = -this.dy;
+              }
+            },
+            check_top_bounce: {
+              condition: () => this.cardinalBallPoints.top <= 0 && this.dy < 0,
+              action: () => { this.dy = -this.dy; }
+            }
+          };
+        }
+      }
+    </script>
+  </body>
+</html>

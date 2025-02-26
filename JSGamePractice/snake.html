@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Snake Game with Difficulty Options and State-based Movement</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #333;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      background-color: #111;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    (function() {
+      // --- MusicManager Class ---
+      class MusicManager {
+        constructor() {
+          this.menuMusic = new Audio("OpeningTheme.mp3");
+          this.gameMusic = new Audio("GetReady.mp3");
+          this.menuMusic.loop = true;
+          this.gameMusic.loop = true;
+        }
+        playMenuMusic() {
+          this.gameMusic.pause();
+          if (this.menuMusic.paused) {
+            this.menuMusic.currentTime = 0;
+            this.menuMusic.play().catch((error) => {
+              console.log("Menu music play failed:", error);
+            });
+          }
+        }
+        playGameMusic() {
+          this.menuMusic.pause();
+          if (this.gameMusic.paused) {
+            this.gameMusic.currentTime = 0;
+            this.gameMusic.play().catch((error) => {
+              console.log("Game music play failed:", error);
+            });
+          }
+        }
+        stop() {
+          this.menuMusic.pause();
+          this.gameMusic.pause();
+        }
+      }
+      
+      const musicManager = new MusicManager();
+      
+      // --- Canvas & Global Constants ---
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const gridSize = 20;  // Each patch is 20x20 pixels.
+      let tileCountX = canvas.width / gridSize;
+      let tileCountY = canvas.height / gridSize;
+      
+      // --- InitScreen Class ---
+      class InitScreen {
+        draw(ctx, canvas) {
+          ctx.fillStyle = "#111";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "white";
+          ctx.font = "30px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("Click Screen to Start", canvas.width / 2, canvas.height / 2);
+        }
+      }
+      
+      // --- Menu Class ---
+      class Menu {
+        draw(ctx, canvas, difficulty) {
+          ctx.fillStyle = "#111";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.font = "30px Arial";
+          ctx.fillText("Snake Game", canvas.width / 2, canvas.height / 2 - 100);
+          ctx.font = "20px Arial";
+          ctx.fillText("Press 1 for Standard Size", canvas.width / 2, canvas.height / 2 - 60);
+          ctx.fillText("Press 2 for Full Screen", canvas.width / 2, canvas.height / 2 - 30);
+          ctx.fillText("Press E for Easy, M for Medium, H for Hard", canvas.width / 2, canvas.height / 2);
+          ctx.fillText("Selected Difficulty: " + difficulty.toUpperCase(), canvas.width / 2, canvas.height / 2 + 30);
+          ctx.fillText("Press Enter to Start", canvas.width / 2, canvas.height / 2 + 60);
+        }
+      }
+      
+      // --- Game Class ---
+      class Game {
+        constructor() {
+          // States: "init", "menu", "playing", "gameover"
+          this.state = "init";
+          this.initScreen = new InitScreen();
+          this.menu = new Menu();
+          this.snake = new Snake("easy"); // Default difficulty.
+          this.food = new Food();
+          this.score = 0;
+          this.lastTime = 0;
+          this.difficulty = "easy"; // "easy", "medium", "hard"
+        }
+        startGame() {
+          // Create a new snake with the chosen difficulty.
+          this.snake = new Snake(this.difficulty);
+          this.food.place(this.snake);
+          this.score = 0;
+          this.changeState("playing");
+        }
+        changeState(newState) {
+          console.log("Game state changed from", this.state, "to", newState);
+          this.state = newState;
+          if (this.state === "menu") {
+            musicManager.playMenuMusic();
+          } else if (this.state === "playing") {
+            musicManager.playGameMusic();
+          } else if (this.state === "gameover") {
+            musicManager.playMenuMusic();
+          }
+        }
+        update(deltaTime) {
+          if (this.state === "playing") {
+            this.snake.update();
+            const head = this.snake.headGrid();
+            if (head.x === this.food.position.x && head.y === this.food.position.y) {
+              this.snake.grow();
+              this.score++;
+              this.food.place(this.snake);
+            }
+            if (this.snake.checkCollision()) {
+              this.changeState("gameover");
+            }
+          }
+        }
+        draw() {
+          ctx.fillStyle = "#111";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          if (this.state === "init") {
+            this.initScreen.draw(ctx, canvas);
+          } else if (this.state === "menu") {
+            this.menu.draw(ctx, canvas, this.difficulty);
+          } else if (this.state === "playing") {
+            this.food.draw(ctx);
+            this.snake.draw(ctx);
+            ctx.fillStyle = "white";
+            ctx.font = "20px Arial";
+            ctx.textAlign = "left";
+            ctx.fillText("Score: " + this.score, 10, 30);
+          } else if (this.state === "gameover") {
+            this.food.draw(ctx);
+            this.snake.draw(ctx);
+            ctx.fillStyle = "white";
+            ctx.font = "30px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("Game Over", canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = "20px Arial";
+            ctx.fillText("Press Enter to Restart", canvas.width / 2, canvas.height / 2);
+            ctx.fillText("Score: " + this.score, canvas.width / 2, canvas.height / 2 + 30);
+          }
+        }
+        loop(timestamp) {
+          if (!this.lastTime) this.lastTime = timestamp;
+          let deltaTime = timestamp - this.lastTime;
+          this.lastTime = timestamp;
+          this.update(deltaTime);
+          this.draw();
+          requestAnimationFrame(this.loop.bind(this));
+        }
+        start() {
+          requestAnimationFrame(this.loop.bind(this));
+        }
+      }
+      
+      // --- Snake State Classes ---
+      class SnakeState {
+        constructor(snake) {
+          this.snake = snake;
+        }
+        update() {
+          // Abstract; implemented in subclasses.
+        }
+        checkTransition() {
+          // Abstract; implemented in subclasses.
+        }
+      }
+      
+      // AlignedState enables a change in direction.
+      class AlignedState extends SnakeState {
+        update() {
+          // When aligned, apply the saved direction.
+          // This is the only different line
+          this.snake.direction = this.snake.nextDirection;
+
+
+          let head = this.snake.path[0];
+          let newHead = {
+            x: head.x + this.snake.direction.x * this.snake.speed,
+            y: head.y + this.snake.direction.y * this.snake.speed
+          };
+          this.snake.path.unshift(newHead);
+          this.snake.trimPath();
+        }
+        checkTransition() {
+          let head = this.snake.path[0];
+          // Use a dynamic threshold equal to snake.speed.
+          if (Math.abs(head.x % gridSize) >= this.snake.speed ||
+              Math.abs(head.y % gridSize) >= this.snake.speed) {
+            this.snake.state = new NotAlignedState(this.snake);
+          }
+        }
+      }
+      
+      // NotAlignedState constrains movement (no direction change allowed).
+      class NotAlignedState extends SnakeState {
+        update() {
+          let head = this.snake.path[0];
+          let newHead = {
+            x: head.x + this.snake.direction.x * this.snake.speed,
+            y: head.y + this.snake.direction.y * this.snake.speed
+          };
+          this.snake.path.unshift(newHead);
+          this.snake.trimPath();
+        }
+        checkTransition() {
+          let head = this.snake.path[0];
+          if (Math.abs(head.x % gridSize) < this.snake.speed &&
+              Math.abs(head.y % gridSize) < this.snake.speed) {
+            this.snake.state = new AlignedState(this.snake);
+          }
+        }
+      }
+      
+      // --- Snake Class (Refactored with States) ---
+      class Snake {
+        constructor(difficulty) {
+          const startX = Math.floor(tileCountX / 2) * gridSize;
+          const startY = Math.floor(tileCountY / 2) * gridSize;
+          // Pre-populate the path with three grid-aligned segments.
+          this.path = [
+            { x: startX, y: startY },
+            { x: startX - gridSize, y: startY },
+            { x: startX - 2 * gridSize, y: startY }
+          ];
+          this.length = 3 * gridSize; // Total length in pixels.
+          this.direction = { x: 1, y: 0 };
+          this.nextDirection = { x: 1, y: 0 };
+          if (difficulty === "medium") {
+            this.speed = 2;
+          } else if (difficulty === "hard") {
+            this.speed = 4;
+          } else {
+            this.speed = 1;
+          }
+          // Initially, the snake is grid-aligned.
+          this.state = new AlignedState(this);
+        }
+        update() {
+          this.state.update();
+          this.state.checkTransition();
+        }
+        trimPath() {
+          while (this.getPathLength() > this.length && this.path.length > 1) {
+            this.path.pop();
+          }
+        }
+        getPathLength() {
+          let dist = 0;
+          for (let i = 0; i < this.path.length - 1; i++) {
+            let dx = this.path[i].x - this.path[i + 1].x;
+            let dy = this.path[i].y - this.path[i + 1].y;
+            dist += Math.hypot(dx, dy);
+          }
+          return dist;
+        }
+        sampleAtDistance(d) {
+          if (d <= 0) return { x: this.path[0].x, y: this.path[0].y };
+          let distSoFar = 0;
+          for (let i = 0; i < this.path.length - 1; i++) {
+            let p1 = this.path[i];
+            let p2 = this.path[i + 1];
+            let segLen = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            if (distSoFar + segLen >= d) {
+              let ratio = (d - distSoFar) / segLen;
+              return { 
+                x: p1.x + ratio * (p2.x - p1.x), 
+                y: p1.y + ratio * (p2.y - p1.y)
+              };
+            }
+            distSoFar += segLen;
+          }
+          return this.path[this.path.length - 1];
+        }
+        draw(ctx) {
+          ctx.fillStyle = "lime";
+          let patches = Math.floor(this.length / gridSize);
+          for (let i = 0; i < patches; i++) {
+            let d = i * gridSize;
+            let p = this.sampleAtDistance(d);
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), gridSize, gridSize);
+          }
+        }
+        grow() {
+          this.length += gridSize;
+        }
+        setDirection(newDir) {
+          if ((newDir.x === -this.direction.x && newDir.y === 0) ||
+              (newDir.y === -this.direction.y && newDir.x === 0)) {
+            return;
+          }
+          this.nextDirection = newDir;
+        }
+        headGrid() {
+          let head = this.path[0];
+          return { x: Math.floor(head.x / gridSize), y: Math.floor(head.y / gridSize) };
+        }
+        checkCollision() {
+          let head = this.headGrid();
+          if (head.x < 0 || head.x >= tileCountX || head.y < 0 || head.y >= tileCountY) {
+            return true;
+          }
+          // Skip checking the first patch to avoid collisions with trailing patches.
+          let patches = Math.floor(this.length / gridSize);
+          for (let i = 2; i < patches; i++) {
+            let p = this.sampleAtDistance(i * gridSize);
+            let cell = { x: Math.floor(p.x / gridSize), y: Math.floor(p.y / gridSize) };
+            if (cell.x === head.x && cell.y === head.y) {
+              return true;
+            }
+          }
+          return false;
+        }
+      }
+      
+      // --- Food Class ---
+      class Food {
+        constructor() {
+          this.position = { x: 0, y: 0 };
+          this.placeRandom();
+        }
+        placeRandom() {
+          this.position.x = Math.floor(Math.random() * tileCountX);
+          this.position.y = Math.floor(Math.random() * tileCountY);
+        }
+        place(snake) {
+          let valid = false;
+          while (!valid) {
+            this.placeRandom();
+            valid = true;
+            for (let seg of snake.path) {
+              let cell = { x: Math.floor(seg.x / gridSize), y: Math.floor(seg.y / gridSize) };
+              if (cell.x === this.position.x && cell.y === this.position.y) {
+                valid = false;
+                break;
+              }
+            }
+            let patches = Math.floor(snake.length / gridSize);
+            for (let i = 0; i < patches; i++) {
+              let p = snake.sampleAtDistance(i * gridSize);
+              let cell = { x: Math.floor(p.x / gridSize), y: Math.floor(p.y / gridSize) };
+              if (cell.x === this.position.x && cell.y === this.position.y) {
+                valid = false;
+                break;
+              }
+            }
+          }
+        }
+        draw(ctx) {
+          ctx.fillStyle = "red";
+          ctx.fillRect(this.position.x * gridSize, this.position.y * gridSize, gridSize, gridSize);
+        }
+      }
+      
+      // --- Initialization & Input Handling ---
+      const game = new Game();
+      
+      document.addEventListener("click", (e) => {
+        if (game.state === "init") {
+          game.changeState("menu");
+        }
+      });
+      
+      document.addEventListener("keydown", (e) => {
+        if (game.state === "init") {
+          if (e.key === "Enter") {
+            game.changeState("menu");
+          } 
+        } else if (game.state === "menu") {
+          if (e.key === "1") {
+            canvas.width = 800;
+            canvas.height = 600;
+            tileCountX = canvas.width / gridSize;
+            tileCountY = canvas.height / gridSize;
+            if (document.fullscreenElement) {
+              document.exitFullscreen();
+            }
+          } else if (e.key === "2") {
+            if (canvas.requestFullscreen) {
+              canvas.requestFullscreen();
+            } else if (canvas.mozRequestFullScreen) {
+              canvas.mozRequestFullScreen();
+            } else if (canvas.webkitRequestFullscreen) {
+              canvas.webkitRequestFullscreen();
+            } else if (canvas.msRequestFullscreen) {
+              canvas.msRequestFullscreen();
+            }
+            setTimeout(() => {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+              tileCountX = canvas.width / gridSize;
+              tileCountY = canvas.height / gridSize;
+            }, 500);
+          } else if (e.key.toLowerCase() === "e") {
+            game.difficulty = "easy";
+          } else if (e.key.toLowerCase() === "m") {
+            game.difficulty = "medium";
+          } else if (e.key.toLowerCase() === "h") {
+            game.difficulty = "hard";
+          } else if (e.key === "Enter") {
+            game.startGame();
+          }
+        } else if (game.state === "playing") {
+          switch (e.key) {
+            case "ArrowUp":
+              game.snake.setDirection({ x: 0, y: -1 });
+              break;
+            case "ArrowDown":
+              game.snake.setDirection({ x: 0, y: 1 });
+              break;
+            case "ArrowLeft":
+              game.snake.setDirection({ x: -1, y: 0 });
+              break;
+            case "ArrowRight":
+              game.snake.setDirection({ x: 1, y: 0 });
+              break;
+          }
+        } else if (game.state === "gameover") {
+          if (e.key === "Enter") {
+            game.startGame();
+          }
+        }
+      });
+      
+      game.start();
+    })();
+  </script>
+</body>
+</html>
