@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Experiment</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+    canvas {
+      border: 1px solid #000;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+  </style>
+</head>
+<!-- build the canvas and draw a spinning star -->
+<body>
+  <div id="controls">
+    <label for="speedSlider">Speed:</label>
+    <input type="range" id="speedSlider" min="0" max="0.1" step="0.01" value="0.01">
+  </div>
+  <!-- instantiate canvas -->
+  <canvas id="canvas"></canvas>
+
+<script>
+        // Keydown event listener for movement
+    // throttle event listener to 60fps
+    function throttleMovement(func, timeDelay) {
+    let timerFlag = null;
+
+    return (...args) => {
+        if (timerFlag === null) {
+        func(...args);
+        timerFlag = setTimeout(() => {
+            timerFlag = null;
+        }, timeDelay);
+        }
+    };
+    }
+    
+    const wMove = () => { 
+ for (let i  = 0; i < 150; i++) {
+   offsetY -= moveStep;
+   requestAnimationFrame();
+
+  }
+} 
+
+    // canvasElement variable points to the canvas 
+    const canvasElement = document.getElementById('canvas');
+    // ctx points to 2d context of the canvas
+    const ctx = canvasElement.getContext('2d');
+    canvasElement.width = window.innerWidth;
+    canvasElement.height = window.innerHeight;
+
+    const speedSlider = document.getElementById('speedSlider');
+
+    // New variables for movement
+    let offsetX = 0, offsetY = 0;
+    const moveStep = 1;
+
+    document.addEventListener('keydown', (e) => {
+      switch(e.key.toLowerCase()) {
+        case 'w': throttleMovement(wMove(), 1000); break;
+        case 's': offsetY += moveStep; break;
+        case 'a': offsetX -= moveStep; break;
+        case 'd': offsetX += moveStep; break;
+      }
+    });
+    let time = 0;
+    function draw() {
+      time++;
+      // every frame we clear the rect and save
+      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      ctx.save();
+      // move to the center of the canvas plus offsets for movement
+      ctx.translate((canvasElement.width / 2) + offsetX, (canvasElement.height / 2) + offsetY);
+      // rotate the canvas
+      const speed = parseFloat(speedSlider.value);
+      ctx.rotate(time * speed);
+      ctx.beginPath();
+      let num_divs = 5;
+      let pi_scale = 2 / num_divs;
+      console.log(pi_scale);
+      for (let i = 0; i < num_divs; i++) {
+        ctx.lineTo(Math.cos(i * pi_scale * Math.PI) * 100,
+                     Math.sin(i * pi_scale * Math.PI) * 100);
+      }
+      // close path closes the shape
+      ctx.closePath();
+      // and stroke draws the shape
+      ctx.stroke();
+      // and restore restores the canvas to the last save
+      ctx.restore();
+        // requestAnimationFrame is a function that calls the draw function
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+
+
+
+</body>
+
+</html>
