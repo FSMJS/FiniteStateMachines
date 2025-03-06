@@ -1,0 +1,22 @@
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f0f0f0;
+}
+canvas {
+  border: 0.0625em solid #000;
+}
+#controls {
+  position: absolute;
+  top: 0.625em;
+  left: 0.625em;
+}
+#controls2 {
+  position: absolute;
+  top: 1.875em;
+  left: 0.625em;
+}

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Experiment</title>
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <div id="controls">
+    <label for="speedSlider">Speed:</label>
+    <input type="range" id="speedSlider" min="0" max="0.1" step="0.01" value="0.01">
+  </div>
+  <div id="controls2">
+    <label for="numPointsSlider"># Sides:</label>
+    <input type="range" id="numPointsSlider" min="3" max="20" step="1" value="3">
+  </div>
+  <canvas id="canvas">
+  </canvas>
+  <script src="util/main.js" defer></script>
+</body>
+</html>
