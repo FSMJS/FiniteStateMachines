@@ -5,10 +5,11 @@ body {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: #f0f0f0;
+  background-color: rgb(63, 63, 63);
+  color: rgb(227, 227, 227);
 }
 canvas {
-  border: 0.0625em solid #000;
+  border: 0.0625em solid rgb(227, 227, 227);
 }
 #controls {
   position: absolute;

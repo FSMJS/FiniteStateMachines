@@ -88,6 +88,8 @@ function draw() {
     ctx.fill();
   }
 
+  ctx.fillStyle = 'rgb(227, 227, 227)';
+  ctx.strokeStyle = 'rgb(227, 227, 227)';
   // Request next frame
   requestAnimationFrame(draw);
 }
