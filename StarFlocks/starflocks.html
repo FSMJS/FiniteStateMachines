@@ -1,0 +1,60 @@
+<script>
+    // Set up the canvas.
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Global variable to store current mouse position.
+    let mouse = { x: 0, y: 0 };
+    
+    // Global flag for gravity; default off.
+    let gravityEnabled = false;
+    // Gravity constant (pixels per frame^2)
+    const GRAVITY = 1;//0.5;
+    
+    // Global variable to track the fastest detected ball speed.
+    let globalMaxSpeed = 0;
+    
+    // Update the mouse coordinates on mouse move.
+    window.addEventListener("mousemove", (e) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+      if (currentState.onMouseMove) currentState.onMouseMove(e);
+    });
+    
+    // Update the mouse coordinates on touch move.
+    window.addEventListener("touchmove", (e) => {
+      mouse.x = e.touches[0].clientX;
+      mouse.y = e.touches[0].clientY;
+      if (currentState.onMouseMove) currentState.onMouseMove(e);
+    });
+
+    // mouse draw on canvas when clicked
+    window.addEventListener("click", (e) => {
+      if (currentState.onClick) currentState.onClick(e);
+    });
+
+    // Set up the initial state.
+    let currentState = {
+      update: function() {},
+      draw: function() {},
+      onMouseMove: function() {},
+      onClick: function() {},
+    };
+
+    // Set up the game loop.
+    function gameLoop() {
+      currentState.update();
+      currentState.draw();
+      requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
+
+    
+
+
+
+
+
+</script>
