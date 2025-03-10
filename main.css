@@ -4,20 +4,19 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
+  height: 99vh;
+  width: 100%;
   background-color: rgb(63, 63, 63);
   color: rgb(227, 227, 227);
 }
-canvas {
-  border: 0.0625em solid rgb(227, 227, 227);
-}
+
 #controls {
   position: absolute;
-  top: 0.625em;
+  top: 1em;
   left: 0.625em;
 }
 #controls2 {
   position: absolute;
-  top: 1.875em;
+  top: 2.875em;
   left: 0.625em;
 }
