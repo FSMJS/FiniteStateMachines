@@ -52,15 +52,15 @@ function draw() {
   time++;
 
   // Update position based on held keys (WASD)
-  if (keysDown['a']) offsetX = Math.max((offsetX -= moveStep), -((canvasElement.width / 2) - 100));
-  if (keysDown['d']) offsetX = Math.min((offsetX += moveStep), ((canvasElement.width / 2) - 100)); console.log(offsetX);
+  if (keysDown['a']) offsetX = Math.max((offsetX -= moveStep), -((canvasElement.width / 2)));
+  if (keysDown['d']) offsetX = Math.min((offsetX += moveStep), ((canvasElement.width / 2))); console.log(offsetX);
 
   // Clear canvas and set up for redraw
   ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   
   // Save context, apply translation and rotation, then draw spinning star
   ctx.save();
-  ctx.translate((canvasElement.width / 2) + offsetX, (canvasElement.height - 100));
+  ctx.translate((canvasElement.width / 2) + offsetX, (canvasElement.height/2) + offsetY);
   const speed = parseFloat(speedSlider.value);
   numDivs = Number(numPointsSlider.value);
   ctx.rotate(time * speed);

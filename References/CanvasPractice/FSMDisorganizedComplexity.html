@@ -49,7 +49,7 @@
       // Global flag for gravity; default off.
       let gravityEnabled = false;
       // Gravity constant (pixels per frame^2)
-      const GRAVITY = 1;//0.5;
+      const GRAVITY = 1;
       
       // Global variable to track the fastest detected ball speed.
       let globalMaxSpeed = 0;
@@ -292,11 +292,14 @@
       
       // ---------------------------------------------------
       // Play Game State – shows multiple bouncing balls.
+      // Also tracks average speed history for the last 1000 frames.
       // ---------------------------------------------------
       class PlayGameState extends GameState {
         constructor(numBalls) {
           super();
           this.balls = [];
+          this.averageSpeed = 0; // Current average speed.
+          this.speedHistory = []; // History of average speeds.
           // Create the specified number of balls with random positions/velocities.
           for (let i = 0; i < numBalls; i++) {
             const radius = 30;
@@ -319,6 +322,7 @@
         update() {
           // Update each ball.
           this.balls.forEach(ball => ball.update());
+           
           // Compute the fastest speed among all balls.
           globalMaxSpeed = 0;
           this.balls.forEach(ball => {
@@ -351,10 +355,57 @@
               }
             }
           }
+          // Calculate average speed for all balls.
+          let speeds = this.balls.map(ball => Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy));
+          this.averageSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+          
+          // Add current average speed to history (keeping only the last 1000 frames).
+          this.speedHistory.push(this.averageSpeed);
+          if (this.speedHistory.length > 5000) {
+            this.speedHistory.shift();
+          }
         }
         draw(ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           this.balls.forEach(ball => ball.draw(ctx));
+          
+          // Draw the current average speed text.
+          ctx.fillStyle = "black";
+          ctx.font = "20px Arial";
+          ctx.textAlign = "right";
+          ctx.fillText("Average Speed: " + this.averageSpeed.toFixed(2), canvas.width - 10, 30);
+          
+          // Define the graph area in the top right corner.
+          const graphWidth = 200;
+          const graphHeight = 100;
+          const graphX = canvas.width - graphWidth - 10;
+          const graphY = 40; // below the average speed text.
+          
+          // Draw the border for the graph area.
+          ctx.strokeStyle = "black";
+          ctx.strokeRect(graphX, graphY, graphWidth, graphHeight);
+          
+          // Draw the line graph if we have at least 2 points.
+          if (this.speedHistory.length > 1) {
+            // Determine the maximum speed in the history for scaling.
+            let maxSpeedInHistory = Math.max(...this.speedHistory);
+            if (maxSpeedInHistory === 0) maxSpeedInHistory = 1; // Avoid division by zero.
+            ctx.beginPath();
+            // Calculate horizontal scale: if history has N points, the x increment is graphWidth/(N-1).
+            const xIncrement = graphWidth / (this.speedHistory.length - 1);
+            this.speedHistory.forEach((speed, index) => {
+              // Invert y axis: higher speeds plot higher in the graph.
+              const x = graphX + index * xIncrement;
+              const y = graphY + graphHeight - (speed / maxSpeedInHistory * graphHeight);
+              if (index === 0) {
+                ctx.moveTo(x, y);
+              } else {
+                ctx.lineTo(x, y);
+              }
+            });
+            ctx.strokeStyle = "red";
+            ctx.stroke();
+          }
         }
         onMouseDown(e) {
           this.balls.forEach(ball => ball.onMouseDown(e));
