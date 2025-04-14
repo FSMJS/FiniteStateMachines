@@ -37,11 +37,16 @@
        <button id="startGameBtn">Start Game</button>
     </div>
     <script>
+      // Store the original canvas dimensions.
+      let originalCanvasWidth = 1200;
+      let originalCanvasHeight = 900;
+      
       // Set up the canvas.
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // Initially, fill the window.
+      canvas.width = originalCanvasWidth;
+      canvas.height = originalCanvasHeight;
       
       // Global variable to store current mouse position.
       let mouse = { x: 0, y: 0 };
@@ -53,6 +58,7 @@
       
       // Global variable to track the fastest detected ball speed.
       let globalMaxSpeed = 0;
+      let maxPeriods = 5000;
       
       // Update the mouse coordinates on mouse move.
       window.addEventListener("mousemove", (e) => {
@@ -95,7 +101,6 @@
       // ---------------------------------------------------
       // Helper: interpolateColor
       // Maps a speed (0 to maxSpeed) to a color between white and dark blue.
-      // When speed == 0, returns white; when speed >= maxSpeed, returns dark blue.
       // ---------------------------------------------------
       function interpolateColor(speed, maxSpeed) {
         let t = Math.min(speed / maxSpeed, 1);
@@ -117,7 +122,6 @@
           this.buttons = [];
         }
         update() {}
-        // Consolidated menu drawing function.
         drawMenu(ctx, title, subText = "") {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.fillStyle = "#333";
@@ -164,7 +168,6 @@
               height: 50,
               text: "Play Game",
               action: () => {
-                // Transition to gravity selection state.
                 currentState = new GravitySelectionState();
               }
             },
@@ -229,7 +232,6 @@
       class BallCountSelectionState extends GameState {
         constructor() {
           super();
-          // Show the slider container.
           document.getElementById("ballSliderContainer").style.display = "block";
           const slider = document.getElementById("ballSlider");
           const display = document.getElementById("ballCountDisplay");
@@ -238,7 +240,6 @@
           });
           document.getElementById("startGameBtn").onclick = () => {
             const numBalls = parseInt(slider.value);
-            // Hide slider container.
             document.getElementById("ballSliderContainer").style.display = "none";
             currentState = new PlayGameState(numBalls);
           };
@@ -291,51 +292,45 @@
       }
       
       // ---------------------------------------------------
-      // Play Game State – shows multiple bouncing balls.
-      // Also tracks average speed history for the last 1000 frames.
+      // Play Game State – shows multiple bouncing balls and tracks average speed history.
       // ---------------------------------------------------
       class PlayGameState extends GameState {
         constructor(numBalls) {
           super();
           this.balls = [];
-          this.averageSpeed = 0; // Current average speed.
-          this.speedHistory = []; // History of average speeds.
-          // Create the specified number of balls with random positions/velocities.
+          this.averageSpeed = 0;
+          this.speedHistory = [];
           for (let i = 0; i < numBalls; i++) {
             const radius = 30;
             const x = Math.random() * (canvas.width - 2 * radius) + radius;
             const y = Math.random() * (canvas.height - 2 * radius) + radius;
-            const dx = (Math.random() - 0.5) * 10;
-            const dy = (Math.random() - 0.5) * 10;
+            // Speeds are in pixels per frame.
+            const dx = (Math.random() - 0.5) * 30;
+            const dy = (Math.random() - 0.5) * 30;
             this.balls.push(new Ball(x, y, dx, dy, radius));
           }
-          // Check if balls overlap and adjust positions.
+          // Adjust positions if balls overlap.
           for (let i = 0; i < this.balls.length; i++) {
             for (let j = i + 1; j < this.balls.length; j++) {
               while (areOverlapping(this.balls[i], this.balls[j])) {
-                this.balls[i].x = Math.random() * (canvas.width - 2 * 50) + 50;
-                this.balls[i].y = Math.random() * (canvas.height - 2 * 50) + 50;
+                this.balls[i].x = Math.random() * (canvas.width - 100) + 50;
+                this.balls[i].y = Math.random() * (canvas.height - 100) + 50;
               }
             }
           }
         }
         update() {
-          // Update each ball.
           this.balls.forEach(ball => ball.update());
-           
-          // Compute the fastest speed among all balls.
           globalMaxSpeed = 0;
           this.balls.forEach(ball => {
             const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
             if (speed > globalMaxSpeed) globalMaxSpeed = speed;
           });
-          // Check for collisions between every pair of balls.
           for (let i = 0; i < this.balls.length; i++) {
             for (let j = i + 1; j < this.balls.length; j++) {
               if (areColliding(this.balls[i], this.balls[j])) {
                 const ball1 = this.balls[i];
                 const ball2 = this.balls[j];
-                // Adjust overlap to force tangency.
                 adjustOverlap(ball1, ball2);
                 resolveCollision(ball1, ball2);
                 const ball1Dragged = ball1.state instanceof BallDraggedState;
@@ -355,56 +350,76 @@
               }
             }
           }
-          // Calculate average speed for all balls.
           let speeds = this.balls.map(ball => Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy));
           this.averageSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
-          
-          // Add current average speed to history (keeping only the last 1000 frames).
           this.speedHistory.push(this.averageSpeed);
-          if (this.speedHistory.length > 5000) {
+          if (this.speedHistory.length > maxPeriods) {
             this.speedHistory.shift();
           }
         }
         draw(ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           this.balls.forEach(ball => ball.draw(ctx));
-          
-          // Draw the current average speed text.
           ctx.fillStyle = "black";
           ctx.font = "20px Arial";
           ctx.textAlign = "right";
           ctx.fillText("Average Speed: " + this.averageSpeed.toFixed(2), canvas.width - 10, 30);
           
-          // Define the graph area in the top right corner.
+          // Draw graph area (top right corner)
           const graphWidth = 200;
           const graphHeight = 100;
           const graphX = canvas.width - graphWidth - 10;
-          const graphY = 40; // below the average speed text.
-          
-          // Draw the border for the graph area.
+          const graphY = 40;
           ctx.strokeStyle = "black";
           ctx.strokeRect(graphX, graphY, graphWidth, graphHeight);
           
-          // Draw the line graph if we have at least 2 points.
           if (this.speedHistory.length > 1) {
-            // Determine the maximum speed in the history for scaling.
-            let maxSpeedInHistory = Math.max(...this.speedHistory);
-            if (maxSpeedInHistory === 0) maxSpeedInHistory = 1; // Avoid division by zero.
+            let maxValue = Math.max(...this.speedHistory);
+            let minValue = Math.min(...this.speedHistory);
             ctx.beginPath();
-            // Calculate horizontal scale: if history has N points, the x increment is graphWidth/(N-1).
             const xIncrement = graphWidth / (this.speedHistory.length - 1);
             this.speedHistory.forEach((speed, index) => {
-              // Invert y axis: higher speeds plot higher in the graph.
+              let normalized = (maxValue - minValue === 0) ? 0.5 : (speed - minValue) / (maxValue - minValue);
               const x = graphX + index * xIncrement;
-              const y = graphY + graphHeight - (speed / maxSpeedInHistory * graphHeight);
-              if (index === 0) {
-                ctx.moveTo(x, y);
-              } else {
-                ctx.lineTo(x, y);
-              }
+              const y = graphY + graphHeight - (normalized * graphHeight);
+              if (index === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
             });
             ctx.strokeStyle = "red";
             ctx.stroke();
+            
+            // Compute and draw the moving average (blue line)
+            const movingAverageWindow = 1000;
+            let movingAverages = [];
+            for (let i = 0; i < this.speedHistory.length; i++) {
+              let windowData;
+              if (i < movingAverageWindow) {
+                let padCount = movingAverageWindow - i - 1;
+                let padded = new Array(padCount).fill(this.speedHistory[0])
+                              .concat(this.speedHistory.slice(0, i + 1));
+                windowData = padded;
+              } else {
+                windowData = this.speedHistory.slice(i - movingAverageWindow + 1, i + 1);
+              }
+              let avg = windowData.reduce((acc, val) => acc + val, 0) / windowData.length;
+              movingAverages.push(avg);
+            }
+            ctx.beginPath();
+            movingAverages.forEach((avg, index) => {
+              let normalized = (maxValue - minValue === 0) ? 0.5 : (avg - minValue) / (maxValue - minValue);
+              const x = graphX + index * xIncrement;
+              const y = graphY + graphHeight - (normalized * graphHeight);
+              if (index === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.strokeStyle = "blue";
+            ctx.stroke();
+            
+            ctx.fillStyle = "black";
+            ctx.font = "12px Arial";
+            ctx.textAlign = "right";
+            ctx.fillText(maxValue.toFixed(2), graphX - 5, graphY + 10);
+            ctx.fillText(minValue.toFixed(2), graphX - 5, graphY + graphHeight);
           }
         }
         onMouseDown(e) {
@@ -438,9 +453,69 @@
       });
       
       // ---------------------------------------------------
+      // Resize handler: adjust canvas while maintaining original aspect ratio.
+      // Also scale game objects (positions, radii, speeds) and UI elements.
+      // ---------------------------------------------------
+      window.addEventListener("resize", () => {
+        // Store current canvas dimensions.
+        const oldWidth = canvas.width;
+        const oldHeight = canvas.height;
+        
+        // Compute new canvas dimensions while preserving the original aspect ratio.
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const originalRatio = originalCanvasWidth / originalCanvasHeight;
+        let newCanvasWidth, newCanvasHeight;
+        if (windowWidth / windowHeight < originalRatio) {
+          newCanvasWidth = windowWidth;
+          newCanvasHeight = windowWidth / originalRatio;
+        } else {
+          newCanvasHeight = windowHeight;
+          newCanvasWidth = windowHeight * originalRatio;
+        }
+        
+        // Calculate uniform scale factor.
+        const scaleFactor = newCanvasWidth / oldWidth;
+        
+        // Update canvas dimensions.
+        canvas.width = newCanvasWidth;
+        canvas.height = newCanvasHeight;
+        
+        // If in PlayGameState, update each ball's properties proportionally.
+        if (currentState instanceof PlayGameState) {
+          currentState.balls.forEach(ball => {
+            ball.x *= scaleFactor;
+            ball.y *= scaleFactor;
+            ball.dx *= scaleFactor;
+            ball.dy *= scaleFactor;
+            ball.radius *= scaleFactor;
+          });
+        }
+        
+        // For menu states, update button positions.
+        if (currentState instanceof MainMenuState) {
+          currentState.buttons[0].x = canvas.width / 2 - 100;
+          currentState.buttons[0].y = canvas.height / 2 - 70;
+          currentState.buttons[1].x = canvas.width / 2 - 100;
+          currentState.buttons[1].y = canvas.height / 2 + 20;
+        }
+        if (currentState instanceof GravitySelectionState) {
+          currentState.buttons[0].x = canvas.width / 2 - 150;
+          currentState.buttons[0].y = canvas.height / 2 - 50;
+          currentState.buttons[1].x = canvas.width / 2 + 20;
+          currentState.buttons[1].y = canvas.height / 2 - 50;
+        }
+        if (currentState instanceof SomethingElseState) {
+          currentState.buttons[0].x = canvas.width / 2 - 100;
+          currentState.buttons[0].y = canvas.height / 2 - 70;
+          currentState.buttons[1].x = canvas.width / 2 - 100;
+          currentState.buttons[1].y = canvas.height / 2 + 20;
+        }
+      });
+      
+      // ---------------------------------------------------
       // Utility function: adjustOverlap
       // Forces two overlapping balls to be exactly tangent.
-      // Each ball is moved inversely proportional to its speed.
       // ---------------------------------------------------
       function adjustOverlap(ball1, ball2) {
         const dx = ball2.x - ball1.x;
@@ -449,19 +524,13 @@
         const desiredDist = ball1.radius + ball2.radius;
         const overlap = desiredDist - distance;
         if (overlap > 0) {
-          // Compute speeds.
           const v1 = Math.sqrt(ball1.dx * ball1.dx + ball1.dy * ball1.dy);
           const v2 = Math.sqrt(ball2.dx * ball2.dx + ball2.dy * ball2.dy);
           const epsilon = 0.001;
           let weight1 = 1 / (v1 + epsilon);
           let weight2 = 1 / (v2 + epsilon);
-          // If a ball is dragged, adjust its weight (dragged ball moves less).
-          if (ball1.state instanceof BallDraggedState) {
-            weight1 *= 0.1;
-          }
-          if (ball2.state instanceof BallDraggedState) {
-            weight2 *= 0.1;
-          }
+          if (ball1.state instanceof BallDraggedState) weight1 *= 0.1;
+          if (ball2.state instanceof BallDraggedState) weight2 *= 0.1;
           const totalWeight = weight1 + weight2;
           const moveX = (overlap * dx / distance);
           const moveY = (overlap * dy / distance);
@@ -493,22 +562,16 @@
         const dx = ball2.x - ball1.x;
         const dy = ball2.y - ball1.y;
         const distance = Math.sqrt(dx * dx + dy * dy) || 0.01;
-        // Normal vector
         const nx = dx / distance;
         const ny = dy / distance;
-        // Tangent vector
         const tx = -ny;
         const ty = nx;
-        // Dot product tangent
         const dpTan1 = ball1.dx * tx + ball1.dy * ty;
         const dpTan2 = ball2.dx * tx + ball2.dy * ty;
-        // Dot product normal
         const dpNorm1 = ball1.dx * nx + ball1.dy * ny;
         const dpNorm2 = ball2.dx * nx + ball2.dy * ny;
-        // Swap normal velocities (equal mass)
         const m1 = dpNorm2;
         const m2 = dpNorm1;
-        // Update velocities.
         ball1.dx = tx * dpTan1 + nx * m1;
         ball1.dy = ty * dpTan1 + ny * m1;
         ball2.dx = tx * dpTan2 + nx * m2;
@@ -551,7 +614,6 @@
       
       class BallCollisionState extends BallState {
         update() {
-          // After collision resolution, revert to free movement.
           this.ball.changeState(new FreeMovementState(this.ball));
         }
       }
@@ -575,15 +637,12 @@
           this.stored_dx = dx;
           this.stored_dy = dy;
           this.state = new FreeMovementState(this);
-          // For tracking mouse movement during drag.
           this.lastMouseX = 0;
           this.lastMouseY = 0;
-          // Initial color.
           this.color = "blue";
         }
         update() {
           this.state.update();
-          // If gravity is enabled, add acceleration to dy.
           if (gravityEnabled) {
             this.dy += GRAVITY;
           }
@@ -592,10 +651,9 @@
         }
         updateColor() {
           const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-          // Use the fastest detected speed, defaulting to 20 if none.
           const maxSpeed = globalMaxSpeed > 0 ? globalMaxSpeed : 20;
           if (speed < 0.1) {
-            this.color = "#ffffff"; // Stopped ball becomes white.
+            this.color = "#ffffff";
           } else {
             this.color = interpolateColor(speed, maxSpeed);
           }
@@ -613,7 +671,6 @@
         onMouseDown(e) {
           const dist = Math.sqrt((e.clientX - this.x) ** 2 + (e.clientY - this.y) ** 2);
           if (dist <= this.radius * 2) {
-            // Start dragging: reset velocity and store initial mouse position.
             this.dx = 0;
             this.dy = 0;
             this.lastMouseX = e.clientX;
@@ -623,10 +680,8 @@
         }
         onMouseMove(e) {
           if (this.state instanceof BallDraggedState) {
-            // Compute new position and update velocity based on mouse movement.
             const newX = Math.max(this.radius, Math.min(e.clientX, canvas.width - this.radius));
             const newY = Math.max(this.radius, Math.min(e.clientY, canvas.height - this.radius));
-            // Velocity is determined by the difference in mouse positions.
             this.dx = newX - this.lastMouseX;
             this.dy = newY - this.lastMouseY;
             this.x = newX;
@@ -637,11 +692,9 @@
         }
         onMouseUp(e) {
           if (this.state instanceof BallDraggedState) {
-            // When released, retain the computed velocity.
             this.changeState(new FreeMovementState(this));
           }
         }
-        // Getter for cardinal ball points.
         get cardinalBallPoints() {
           return {
             top: this.y - this.radius,
@@ -650,7 +703,6 @@
             right: this.x + this.radius
           };
         }
-        // Method to create the bounce actions dictionary.
         getBounceActions() {
           return {
             check_right_bounce: {
@@ -664,13 +716,11 @@
             check_bottom_bounce: {
               condition: () => this.cardinalBallPoints.bottom >= canvas.height && this.dy > 0,
               action: () => {
-                // If gravity is enabled, adjust for overshoot.
                 if (gravityEnabled) {
                   const prevY = this.y - this.dy;
                   let dt = (canvas.height - this.radius - prevY) / this.dy;
                   dt = Math.max(0, Math.min(dt, 1));
                   this.y = canvas.height - this.radius;
-                  // Subtract the gravitational impulse over the remaining time.
                   this.dy = -(this.dy - GRAVITY * (1 - dt));
                 } else {
                   this.y = canvas.height - this.radius;
